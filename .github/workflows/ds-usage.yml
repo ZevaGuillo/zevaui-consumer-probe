@@ -11,4 +11,4 @@ on:
 
 jobs:
   audit:
-    uses: ZevaGuillo/ZevaUI/.github/workflows/audit-ds-usage.yml@17969c715f210b337a35509acd1623fad301cd46
+    uses: ZevaGuillo/ZevaUI/.github/workflows/audit-ds-usage.yml@v1
