@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "Minimal external consumer of ZevaUI's reusable usage-audit workflow. Exists to prove cross-repository resolution of uses: ...@v1 (RF-UAW14) — the one path a same-repo self-invocation cannot cover.",
+  "packageManager": "pnpm@10.13.1",
   "dependencies": {
     "@zevaui/components": "^0.1.0",
     "@zevaui/tokens": "^0.1.0"
