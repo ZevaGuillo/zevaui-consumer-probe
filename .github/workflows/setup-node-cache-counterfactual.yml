@@ -1,40 +1,56 @@
 # A/B counterfactual harness for the `package-manager-cache: false` line in
 # ZevaUI's reusable workflow `.github/workflows/audit-ds-usage.yml`.
 #
-# WHY THIS EXISTS AND WHY IT IS NOT THE `@bf9e59b` TAG.
+# WHY THIS EXISTS INSTEAD OF JUST POINTING AT THE OLD REVISION.
 #
-# The obvious way to prove that line is load-bearing would be to point
-# `ds-usage.yml` at the revision before it and watch the run go red. That does
-# not work: ZevaUI's pre-sweep revision `bf9e59b` — which `v1` still points at
-# — pins `actions/setup-node@v4`, and v4 has no implicit package-manager
-# caching at all. The bug and its fix arrived in the SAME commit (`17969c7`),
-# so no revision of ZevaUI ever published the broken shape, and there is no
-# `@<sha>` a consumer can call to reproduce it.
+# The obvious way to prove that line is load-bearing would be to aim
+# `ds-usage.yml` at the revision before it and watch the run go red. Two
+# separate things stop that from working:
 #
-# So the broken shape is reconstructed here instead, inside the consumer, where
-# it costs ZevaUI nothing. Both jobs below are the audit job's real prologue —
-# same consumer checkout at $GITHUB_WORKSPACE, same DS checkout, same Node 22,
-# same pinned DS revision, same scanner invocation. The ONLY difference between
-# them is one line:
+#   1. `v1` (commit 7299eca) pins `actions/setup-node@v4`, and v4 has no
+#      implicit package-manager caching at all. There is nothing there to
+#      disable, so the old revision is green BY CONSTRUCTION, not by luck.
+#
+#   2. The v4 -> v5 bump and the `package-manager-cache: false` that neutralises
+#      it landed in the SAME commit (17969c7). No revision of ZevaUI ever
+#      published the broken shape, so there is no `@<sha>` a consumer can call
+#      to reproduce it.
+#
+# So the broken shape is reconstructed here, inside the consumer, where it costs
+# ZevaUI nothing and needs no commit in the design system. Both jobs below are
+# the audit job's real prologue — same consumer checkout at $GITHUB_WORKSPACE,
+# same DS checkout path, same Node 22, same pinned DS revision, same scanner
+# invocation. The ONLY difference between them is one input:
 #
 #   no-fix    setup-node@v5 with no `package-manager-cache` input  -> expect FAIL
 #   with-fix  setup-node@v5 with `package-manager-cache: false`    -> expect PASS
 #
 # Same runner image, same minute, one variable. `packageManager` in this repo's
 # root package.json is what arms it, and there is deliberately no root lockfile
-# — that is the second consumer shape the reusable workflow's comment names.
+# — that is the second of the two consumer shapes the reusable workflow's own
+# comment says would break.
+#
+# A NOTE ON `@bf9e59b`. The `v1` tag is ANNOTATED, so `git rev-parse v1` returns
+# bf9e59b — the tag OBJECT's sha, not a commit. Handing that to `uses:` is a
+# `startup_failure` in 0s with no job and no log, because Actions cannot resolve
+# a tag object as a revision. The commit is `git rev-parse v1^{commit}` =
+# 7299eca. Worth knowing before reading a 0s red run as evidence of anything.
 name: setup-node cache counterfactual
 
 # Dispatch only. This harness is evidence, not a gate: it must never run on a
-# push, because the `no-fix` job is EXPECTED to be red and a permanently red
+# push, because the `no-fix` job is EXPECTED to be red, and a permanently red
 # required check teaches people to ignore red.
 on:
   workflow_dispatch:
 
 env:
-  # Pinned, not `main`: this harness's whole claim is "one line is the
-  # difference", which only holds if both jobs scan the identical scanner.
-  DS_REF: 17969c7
+  # Pinned, and pinned as a FULL 40-char SHA: `actions/checkout` treats anything
+  # shorter as a ref NAME, not an object, and dies with "The process
+  # '/usr/bin/git' failed with exit code 1" before setup-node ever runs — which
+  # looks like the bug under test and is not. This harness's whole claim is "one
+  # line is the difference", so both jobs must reach setup-node with the
+  # identical scanner already on disk.
+  DS_REF: 17969c715f210b337a35509acd1623fad301cd46
 
 jobs:
   # THE BUG. Expected to fail on the setup-node step, before the scanner runs.
@@ -54,9 +70,9 @@ jobs:
           persist-credentials: false
 
       # No `package-manager-cache` input. setup-node@v5 therefore reads
-      # $GITHUB_WORKSPACE/package.json — THIS repository's, not ZevaUI's —
-      # finds `packageManager: pnpm@...`, and tries to resolve a pnpm store in
-      # a job that installs no pnpm.
+      # $GITHUB_WORKSPACE/package.json — THIS repository's, not ZevaUI's — finds
+      # `packageManager: pnpm@...`, and tries to resolve a pnpm store in a job
+      # that installs no pnpm.
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
@@ -69,7 +85,7 @@ jobs:
           AUDIT_WORKING_DIRECTORY: "."
         run: node .zevaui-audit/packages/audit/scripts/audit-usage.js > ds-usage-report.json
 
-  # THE CONTROL. Byte-identical to the job above except for the one input.
+  # THE CONTROL. Identical to the job above except for the one input.
   with-fix:
     name: with-fix (expected PASS)
     runs-on: ubuntu-latest
